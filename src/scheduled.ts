@@ -3,7 +3,8 @@ import { tmdbHeaders, tmdbUrl } from './tmdb'
 import type { DiscoverMovie, DiscoverMovieResponse, MovieDetails } from './tmdb'
 import type { MovieInfo, PopularList, PopularMovie } from './types'
 
-const BATCH_SIZE = 20
+const BATCH_SIZE = 6
+const BATCH_COUNT = 4
 
 function currentWindow(): string {
 	const now = new Date()
@@ -125,38 +126,42 @@ async function continueBuild(env: Env, list: PopularList, key: string): Promise<
 		return
 	}
 
-	const batch = pending.slice(0, BATCH_SIZE)
+	const batch = pending.slice(0, BATCH_SIZE * BATCH_COUNT)
 
-	const responses = await Promise.all(
-		batch.map((movie) =>
-			fetch(tmdbUrl.movieDetails(movie.id), { headers })
+	for (let offset = 0; offset < batch.length; offset += BATCH_SIZE) {
+		const chunk = batch.slice(offset, offset + BATCH_SIZE)
+
+		const responses = await Promise.all(
+			chunk.map((movie) =>
+				fetch(tmdbUrl.movieDetails(movie.id), { headers })
+			)
 		)
-	)
 
-	for (let i = 0; i < batch.length; i++) {
-		try {
-			if (! responses[i].ok) {
-				Sentry.captureMessage(
-					`TMDB movie detail request failed: movie=${batch[i].id} status=${responses[i].status}`
-				)
+		for (let i = 0; i < chunk.length; i++) {
+			try {
+				if (! responses[i].ok) {
+					Sentry.captureMessage(
+						`TMDB movie detail request failed: movie=${chunk[i].id} status=${responses[i].status}`
+					)
 
-				continue
+					continue
+				}
+
+				const details = await responses[i].json<MovieDetails>()
+
+				const movie = list.movies.find((m) => m.id === chunk[i].id)
+
+				if (movie) {
+					movie.details = {
+						imdb_id: details.imdb_id,
+						runtime: details.runtime,
+						status: details.status,
+						genres: details.genres.map((g) => g.name),
+					} satisfies MovieInfo
+				}
+			} catch (error) {
+				Sentry.captureException(error)
 			}
-
-			const details = await responses[i].json<MovieDetails>()
-
-			const movie = list.movies.find((m) => m.id === batch[i].id)
-
-			if (movie) {
-				movie.details = {
-					imdb_id: details.imdb_id,
-					runtime: details.runtime,
-					status: details.status,
-					genres: details.genres.map((g) => g.name),
-				} satisfies MovieInfo
-			}
-		} catch (error) {
-			Sentry.captureException(error)
 		}
 	}
 
