@@ -7,6 +7,7 @@ declare namespace Cloudflare {
 	}
 	interface Env {
 		TMDB_API_KEY: string;
+		MOVIES_KV: KVNamespace;
 	}
 }
 interface Env extends Cloudflare.Env {}
