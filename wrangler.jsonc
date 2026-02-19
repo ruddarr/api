@@ -33,8 +33,8 @@
 	},
 	"routes": [
 		{
-			"pattern": "api.ruddarr.com",
-			"custom_domain": true
+			"zone_name": "ruddarr.com",
+			"pattern": "api.ruddarr.com/*"
 		}
 	]
 }
