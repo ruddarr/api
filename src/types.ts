@@ -1,4 +1,9 @@
-import type { MovieDetails } from './tmdb'
+export interface MovieInfo {
+	imdb_id: string | null
+	runtime: number | null
+	status: string
+	genres: string[]
+}
 
 export interface PopularMovie {
 	id: number
@@ -10,8 +15,7 @@ export interface PopularMovie {
 	vote_count: number
 	score: number
 	poster_path: string
-	source: string
-	details: MovieDetails | null
+	details: MovieInfo | null
 }
 
 export interface PopularList {

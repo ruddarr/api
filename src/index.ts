@@ -1,5 +1,3 @@
-import { tmdbUrl } from './tmdb'
-import type { DiscoverMovie, DiscoverMovieResponse } from './tmdb'
 import type { PopularList } from './types'
 import { buildPopularList } from './scheduled'
 

@@ -1,6 +1,6 @@
 import { tmdbHeaders, tmdbUrl } from './tmdb'
 import type { DiscoverMovie, DiscoverMovieResponse, MovieDetails } from './tmdb'
-import type { PopularList, PopularMovie } from './types'
+import type { MovieInfo, PopularList, PopularMovie } from './types'
 
 const BATCH_SIZE = 20
 
@@ -100,7 +100,6 @@ async function startNewBuild(env: Env, key: string): Promise<void> {
 		vote_count: movie.vote_count,
 		score: Math.round(score(movie, index) * 100) / 100,
 		poster_path: `https://image.tmdb.org/t/p/w342/${movie.poster_path}`,
-		source: 'popular',
 		details: null,
 	}))
 
@@ -138,17 +137,14 @@ async function continueBuild(env: Env, list: PopularList, key: string): Promise<
 
 		const details = await responses[i].json<MovieDetails>()
 
-		// Remove excluded fields
-		const { production_companies, production_countries, spoken_languages, ...filtered } =
-			details as MovieDetails & {
-				production_companies?: unknown
-				production_countries?: unknown
-				spoken_languages?: unknown
-			}
-
 		const movie = list.movies.find((m) => m.id === batch[i].id)
 		if (movie) {
-			movie.details = filtered as MovieDetails
+			movie.details = {
+				imdb_id: details.imdb_id,
+				runtime: details.runtime,
+				status: details.status,
+				genres: details.genres.map((g) => g.name),
+			} satisfies MovieInfo
 		}
 	}
 
