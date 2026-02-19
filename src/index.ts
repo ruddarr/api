@@ -32,33 +32,39 @@ async function handlePopularMovies(env: Env): Promise<Response> {
 	])
 
 	const results = [...data1.results, ...data2.results]
-	const maxPopularity = Math.max(...results.map((m) => m.popularity))
 
-	// Letterboxd-style scoring: heavily favors well-reviewed films.
-	// Uses trending as the base pool, then re-ranks to surface
-	// the kind of films enthusiast audiences gravitate toward.
+	// Letterboxd-style scoring: uses TMDB's trending position as the
+	// popularity signal (no raw popularity number), blended with a
+	// rating formula that favors well-reviewed films.
+
 	// The rating threshold where a movie is considered "neutral" (score = 0.5).
 	// Below this: score drops steeply toward 0. Above this: rises toward 1.
-	// 7.0 is strict — only well-reviewed films get a meaningful boost.
+	// 7.5 is strict — only well-reviewed films get a meaningful boost.
 	const sigmoidCenter = 7.5
 
-	const score = (movie: DiscoverMovie) => {
-		const popularityNormalized = movie.popularity / maxPopularity
+	const score = (movie: DiscoverMovie, index: number) => {
+		// TMDB's trending rank as a score: 1st place = 1.0, last place ≈ 0.
+		// Uses the array index from TMDB's response as the popularity signal.
+		const trendingRank = 1 - index / results.length
 
+		// Sigmoid curve centered at sigmoidCenter: crushes low ratings
+		// toward 0, boosts high ratings toward 1
 		const ratingNormalized = 1 / (1 + Math.exp(-1.5 * (movie.vote_average - sigmoidCenter)))
 
-		// Higher confidence threshold of 250 votes — enthusiast picks tend to have more engaged voters
+		// Linear ramp from 0 to 1 based on vote count, capped at 250.
+		// Movies with few votes don't get undeserved rating boosts.
 		const voteConfidence = Math.min(movie.vote_count / 250, 1)
 
+		// Rating is only as trustworthy as its vote count
 		const weightedRating = ratingNormalized * voteConfidence
 
-		// 20% popularity, 80% confidence-weighted rating
-		return popularityNormalized * 0.2 + weightedRating * 0.8
+		// 20% trending rank, 80% confidence-weighted rating
+		return trendingRank * 0.2 + weightedRating * 0.8
 	}
 
-	const scored = results.map((movie) => ({
+	const scored = results.map((movie, index) => ({
 		...movie,
-		score: Math.round(score(movie) * 100) / 100,
+		score: Math.round(score(movie, index) * 100) / 100,
 	}))
 
 	scored.sort((a, b) => b.score - a.score)
