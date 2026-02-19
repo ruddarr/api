@@ -14,7 +14,7 @@
 		"nodejs_compat"
 	],
 	"kv_namespaces": [
-		{ "binding": "MOVIES_KV", "id": "TODO" }
+		{ "binding": "STORE", "id": "TODO" }
 	],
 	"triggers": {
 		"crons": ["*/5 * * * *"]
