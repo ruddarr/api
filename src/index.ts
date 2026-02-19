@@ -1,7 +1,8 @@
-import type { PopularList } from './types'
+import { withSentry } from './sentry'
 import { buildPopularList } from './scheduled'
+import type { PopularList } from './types'
 
-export default {
+export default withSentry({
 	async fetch(request, env, ctx): Promise<Response> {
 		const url = new URL(request.url)
 
@@ -15,7 +16,7 @@ export default {
 	async scheduled(event, env, ctx): Promise<void> {
 		await buildPopularList(env)
 	},
-} satisfies ExportedHandler<Env>
+})
 
 async function handlePopularMovies(env: Env): Promise<Response> {
 	const list = await env.STORE.get<PopularList>('popular:live', 'json')

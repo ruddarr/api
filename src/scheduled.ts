@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/cloudflare'
 import { tmdbHeaders, tmdbUrl } from './tmdb'
 import type { DiscoverMovie, DiscoverMovieResponse, MovieDetails } from './tmdb'
 import type { MovieInfo, PopularList, PopularMovie } from './types'
@@ -58,6 +59,8 @@ async function startNewBuild(env: Env, key: string): Promise<void> {
 	])
 
 	if (! page1.ok || ! page2.ok) {
+		Sentry.captureMessage(`TMDB trending request failed: page1=${page1.status} page2=${page2.status}`)
+
 		return
 	}
 
@@ -131,20 +134,29 @@ async function continueBuild(env: Env, list: PopularList, key: string): Promise<
 	)
 
 	for (let i = 0; i < batch.length; i++) {
-		if (! responses[i].ok) {
-			continue
-		}
+		try {
+			if (! responses[i].ok) {
+				Sentry.captureMessage(
+					`TMDB movie detail request failed: movie=${batch[i].id} status=${responses[i].status}`
+				)
 
-		const details = await responses[i].json<MovieDetails>()
+				continue
+			}
 
-		const movie = list.movies.find((m) => m.id === batch[i].id)
-		if (movie) {
-			movie.details = {
-				imdb_id: details.imdb_id,
-				runtime: details.runtime,
-				status: details.status,
-				genres: details.genres.map((g) => g.name),
-			} satisfies MovieInfo
+			const details = await responses[i].json<MovieDetails>()
+
+			const movie = list.movies.find((m) => m.id === batch[i].id)
+
+			if (movie) {
+				movie.details = {
+					imdb_id: details.imdb_id,
+					runtime: details.runtime,
+					status: details.status,
+					genres: details.genres.map((g) => g.name),
+				} satisfies MovieInfo
+			}
+		} catch (error) {
+			Sentry.captureException(error)
 		}
 	}
 
