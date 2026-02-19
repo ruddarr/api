@@ -6,6 +6,7 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "ruddarr-api",
 	"main": "src/index.ts",
+	"account_id": "6fda983237b9114965159023cd666e26",
 	"compatibility_date": "2026-02-17",
 	"observability": {
 		"enabled": true
@@ -14,12 +15,16 @@
 		"nodejs_compat"
 	],
 	"kv_namespaces": [
-		{ "binding": "STORE", "id": "TODO" }
+		{
+			"binding": "STORE",
+			"id": "df95fbf07be34b7382de7bfdd4d74bdb"
+		}
 	],
 	"vars": {
 		"SENTRY_DSN": "https://818093c06368797205ba7f73f3c4a826@o4506759093354496.ingest.us.sentry.io/4510914896461824"
 	},
 	"triggers": {
+<<<<<<< HEAD
 		"crons": ["*/5 * * * *"]
 	}
 	/**
@@ -50,4 +55,19 @@
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
 	 */
 	// "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
+=======
+		"crons": [
+			"*/5 * * * *"
+		]
+	},
+	"placement": {
+		"mode": "smart"
+	},
+	"routes": [
+		{
+			"pattern": "api.ruddarr.com",
+			"custom_domain": true
+		}
+	]
+>>>>>>> c854f45 (wip)
 }
