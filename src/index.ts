@@ -19,7 +19,7 @@ export default withSentry({
 })
 
 async function handlePopularMovies(env: Env): Promise<Response> {
-	const list = await env.STORE.get<PopularList>('popular:live', 'json')
+	const list = await env.STORE.get<PopularList>('movies:popular:live', 'json')
 
 	if (! list) {
 		return new Response('List not built yet', { status: 503 })

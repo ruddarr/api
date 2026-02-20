@@ -1,11 +1,4 @@
-export interface MovieInfo {
-	imdb_id: string | null
-	runtime: number | null
-	status: string
-	genres: string[]
-}
-
-export interface PopularMovie {
+export interface PopularItem {
 	id: number
 	title: string
 	overview: string
@@ -15,10 +8,25 @@ export interface PopularMovie {
 	vote_count: number
 	score: number
 	poster_path: string
-	details: MovieInfo | null
+	movie: MovieInfo | null
+	series: SeriesInfo | null
 }
 
 export interface PopularList {
 	timestamp: string
-	movies: PopularMovie[]
+	items: PopularItem[]
+}
+
+export interface MovieInfo {
+	imdb_id: string | null
+	runtime: number | null
+	status: string
+	genres: string[]
+}
+
+export interface SeriesInfo {
+	number_of_seasons: number
+	number_of_episodes: number
+	status: string
+	genres: string[]
 }

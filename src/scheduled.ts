@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/cloudflare'
 import { tmdbHeaders, tmdbUrl } from './tmdb'
 import type { DiscoverMovie, DiscoverMovieResponse, MovieDetails } from './tmdb'
-import type { MovieInfo, PopularList, PopularMovie } from './types'
+import type { MovieInfo, PopularItem, PopularList } from './types'
 
 const BATCH_SIZE = 6
 const BATCH_COUNT = 4
@@ -14,40 +14,40 @@ function currentWindow(): string {
 }
 
 export async function buildPopularList(env: Env): Promise<void> {
-	const live = await env.STORE.get<PopularList>('popular:live', 'json')
+	const live = await env.STORE.get<PopularList>('movies:popular:live', 'json')
 
-	// Ensure `popular:live` exists
+	// Ensure `movies:popular:live` exists
 	if (! live) {
-		await startNewBuild(env, 'popular:live')
+		await startNewBuild(env, 'movies:popular:live')
 		return
 	}
 
-	// Fill in any missing details on `popular:live`
-	if (live.movies.some((m) => m.details === null)) {
-		await continueBuild(env, live, 'popular:live')
+	// Fill in any missing details on `movies:popular:live`
+	if (live.items.some((m) => m.movie === null)) {
+		await continueBuild(env, live, 'movies:popular:live')
 		return
 	}
 
-	// `popular:live` is complete — nothing to do if still in the current window
+	// `movies:popular:live` is complete — nothing to do if still in the current window
 	if (live.timestamp === currentWindow()) {
 		return
 	}
 
-	// `popular:live` is stale — build the next window
-	const next = await env.STORE.get<PopularList>('popular:next', 'json')
+	// `movies:popular:live` is stale — build the next window
+	const next = await env.STORE.get<PopularList>('movies:popular:next', 'json')
 
-	// No in-progress build for the current window — start `popular:next`
+	// No in-progress build for the current window — start `movies:popular:next`
 	if (! next || next.timestamp !== currentWindow()) {
-		await startNewBuild(env, 'popular:next')
+		await startNewBuild(env, 'movies:popular:next')
 		return
 	}
 
-	// Continue fetching details for `popular:next`
-	await continueBuild(env, next, 'popular:next')
+	// Continue fetching details for `movies:popular:next`
+	await continueBuild(env, next, 'movies:popular:next')
 
-	// All details fetched — promote `popular:next` to `popular:live`
-	if (next.movies.every((m) => m.details !== null)) {
-		await env.STORE.put('popular:live', JSON.stringify(next))
+	// All details fetched — promote `movies:popular:next` to `movies:popular:live`
+	if (next.items.every((m) => m.movie !== null)) {
+		await env.STORE.put('movies:popular:live', JSON.stringify(next))
 	}
 }
 
@@ -95,7 +95,7 @@ async function startNewBuild(env: Env, key: string): Promise<void> {
 		return trendingRank * 0.2 + weightedRating * 0.8
 	}
 
-	const movies: PopularMovie[] = results.map((movie, index) => ({
+	const movies: PopularItem[] = results.map((movie, index) => ({
 		id: movie.id,
 		title: movie.title,
 		overview: movie.overview,
@@ -105,14 +105,15 @@ async function startNewBuild(env: Env, key: string): Promise<void> {
 		vote_count: movie.vote_count,
 		score: Math.round(score(movie, index) * 100) / 100,
 		poster_path: `https://image.tmdb.org/t/p/w342/${movie.poster_path}`,
-		details: null,
+		movie: null,
+		series: null,
 	}))
 
 	movies.sort((a, b) => b.score - a.score)
 
 	const list: PopularList = {
 		timestamp: currentWindow(),
-		movies,
+		items: movies,
 	}
 
 	await env.STORE.put(key, JSON.stringify(list))
@@ -121,7 +122,7 @@ async function startNewBuild(env: Env, key: string): Promise<void> {
 async function continueBuild(env: Env, list: PopularList, key: string): Promise<void> {
 	const headers = tmdbHeaders(env.TMDB_API_KEY)
 
-	const pending = list.movies.filter((m) => m.details === null)
+	const pending = list.items.filter((m) => m.movie === null)
 
 	if (pending.length === 0) {
 		return
@@ -150,10 +151,10 @@ async function continueBuild(env: Env, list: PopularList, key: string): Promise<
 
 				const details = await responses[i].json<MovieDetails>()
 
-				const movie = list.movies.find((m) => m.id === chunk[i].id)
+				const movie = list.items.find((m) => m.id === chunk[i].id)
 
 				if (movie) {
-					movie.details = {
+					movie.movie = {
 						imdb_id: details.imdb_id,
 						runtime: details.runtime,
 						status: details.status,
