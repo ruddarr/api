@@ -19,11 +19,10 @@ export default withSentry({
 	},
 
 	async scheduled(event, env, ctx): Promise<void> {
-		const type: MediaType = event.cron === '5/10 * * * *'
-			? 'series'
-			: 'movies'
-
-		await buildPopularList(env, type)
+		await Promise.all([
+			buildPopularList(env, 'movies'),
+			buildPopularList(env, 'series'),
+		])
 	},
 })
 
