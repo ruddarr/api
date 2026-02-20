@@ -1,6 +1,6 @@
 import { withSentry } from './sentry'
 import { buildPopularList } from './scheduled'
-import type { PopularList } from './types'
+import type { MediaType, PopularList } from './types'
 
 export default withSentry({
 	async fetch(request, env, ctx): Promise<Response> {
@@ -8,22 +8,30 @@ export default withSentry({
 		const path = url.pathname.replace(/\/+$/, '')
 
 		if (path === '/popular/movies') {
-			return handlePopularMovies(env)
+			return handlePopularList(env, 'movies')
 		}
 
-		return Response.json({ error: 'Not Found' }, { status: 404 })
+		if (path === '/popular/series') {
+			return handlePopularList(env, 'series')
+		}
+
+		return Response.json({ message: 'Not Found' }, { status: 404 })
 	},
 
 	async scheduled(event, env, ctx): Promise<void> {
-		await buildPopularList(env)
+		const type: MediaType = event.cron === '5/10 * * * *'
+			? 'series'
+			: 'movies'
+
+		await buildPopularList(env, type)
 	},
 })
 
-async function handlePopularMovies(env: Env): Promise<Response> {
-	const list = await env.STORE.get<PopularList>('movies:popular:live', 'json')
+async function handlePopularList(env: Env, type: MediaType): Promise<Response> {
+	const list = await env.STORE.get<PopularList>(`${type}:popular:live`, 'json')
 
 	if (! list) {
-		return Response.json({ error: 'List not built yet' }, { status: 503 })
+		return Response.json({ message: 'List not built yet' }, { status: 503 })
 	}
 
 	return Response.json(list)

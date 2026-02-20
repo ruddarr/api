@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/cloudflare'
 import { tmdbHeaders, tmdbUrl } from './tmdb'
-import type { DiscoverMovie, DiscoverMovieResponse, MovieDetails } from './tmdb'
-import type { MovieInfo, PopularItem, PopularList } from './types'
+import type { DiscoverMovie, DiscoverSeries, TrendingResponse, MovieDetails, SeriesDetails } from './tmdb'
+import type { MediaType, MovieInfo, SeriesInfo, PopularItem, PopularList } from './types'
 
 const BATCH_SIZE = 6
 const BATCH_COUNT = 4
@@ -13,50 +13,61 @@ function currentWindow(): string {
 	return now.toISOString()
 }
 
-export async function buildPopularList(env: Env): Promise<void> {
-	const live = await env.STORE.get<PopularList>('movies:popular:live', 'json')
+export async function buildPopularList(env: Env, type: MediaType): Promise<void> {
+	const liveKey = `${type}:popular:live`
+	const nextKey = `${type}:popular:next`
 
-	// Ensure `movies:popular:live` exists
+	const isIncomplete = (item: PopularItem) => type === 'movies'
+		? item.movie === null
+		: item.series === null
+
+	const live = await env.STORE.get<PopularList>(liveKey, 'json')
+
+	// Ensure live key exists
 	if (! live) {
-		await startNewBuild(env, 'movies:popular:live')
+		await startNewBuild(env, type, liveKey)
 		return
 	}
 
-	// Fill in any missing details on `movies:popular:live`
-	if (live.items.some((m) => m.movie === null)) {
-		await continueBuild(env, live, 'movies:popular:live')
+	// Fill in any missing details
+	if (live.items.some(isIncomplete)) {
+		await continueBuild(env, type, live, liveKey)
 		return
 	}
 
-	// `movies:popular:live` is complete — nothing to do if still in the current window
+	// Complete — nothing to do if still in the current window
 	if (live.timestamp === currentWindow()) {
 		return
 	}
 
-	// `movies:popular:live` is stale — build the next window
-	const next = await env.STORE.get<PopularList>('movies:popular:next', 'json')
+	// Stale — build the next window
+	const next = await env.STORE.get<PopularList>(nextKey, 'json')
 
-	// No in-progress build for the current window — start `movies:popular:next`
+	// No in-progress build for the current window
 	if (! next || next.timestamp !== currentWindow()) {
-		await startNewBuild(env, 'movies:popular:next')
+		await startNewBuild(env, type, nextKey)
 		return
 	}
 
-	// Continue fetching details for `movies:popular:next`
-	await continueBuild(env, next, 'movies:popular:next')
+	// Continue fetching details
+	await continueBuild(env, type, next, nextKey)
 
-	// All details fetched — promote `movies:popular:next` to `movies:popular:live`
-	if (next.items.every((m) => m.movie !== null)) {
-		await env.STORE.put('movies:popular:live', JSON.stringify(next))
+	// All details fetched — promote next to live
+	if (next.items.every((m) => !isIncomplete(m))) {
+		await env.STORE.put(liveKey, JSON.stringify(next))
 	}
 }
 
-async function startNewBuild(env: Env, key: string): Promise<void> {
+async function startNewBuild(env: Env, type: MediaType, key: string): Promise<void> {
 	const headers = tmdbHeaders(env.TMDB_API_KEY)
 
+	const trendingUrl = type === 'movies'
+		? tmdbUrl.trendingMovies
+		: tmdbUrl.trendingSeries
+
 	const [page1, page2] = await Promise.all([
-		fetch(tmdbUrl.trendingMovies(1), { headers }),
-		fetch(tmdbUrl.trendingMovies(2), { headers }),
+		fetch(trendingUrl(1), { headers }),
+		fetch(trendingUrl(2), { headers }),
 	])
 
 	if (! page1.ok || ! page2.ok) {
@@ -66,27 +77,27 @@ async function startNewBuild(env: Env, key: string): Promise<void> {
 	}
 
 	const [data1, data2] = await Promise.all([
-		page1.json<DiscoverMovieResponse>(),
-		page2.json<DiscoverMovieResponse>(),
+		page1.json<TrendingResponse<DiscoverMovie | DiscoverSeries>>(),
+		page2.json<TrendingResponse<DiscoverMovie | DiscoverSeries>>(),
 	])
 
 	const results = [...data1.results, ...data2.results]
-		.filter((movie, index, arr) => arr.findIndex((m) => m.id === movie.id) === index)
+		.filter((item, index, arr) => arr.findIndex((m) => m.id === item.id) === index)
 
 	// The rating threshold where a movie is considered "neutral" (score = 0.5).
 	// Below this: score drops steeply toward 0. Above this: rises toward 1.
 	// 7.5 is strict — only well-reviewed films get a meaningful boost.
 	const sigmoidCenter = 7.5
 
-	const score = (movie: DiscoverMovie, index: number) => {
+	const score = (item: DiscoverMovie | DiscoverSeries, index: number) => {
 		// TMDB's trending rank as a score: 1st place = 1.0, last place ≈ 0.
 		const trendingRank = 1 - index / results.length
 
 		// Sigmoid curve centered at sigmoidCenter
-		const ratingNormalized = 1 / (1 + Math.exp(-1.5 * (movie.vote_average - sigmoidCenter)))
+		const ratingNormalized = 1 / (1 + Math.exp(-1.5 * (item.vote_average - sigmoidCenter)))
 
 		// Linear ramp from 0 to 1 based on vote count, capped at 250.
-		const voteConfidence = Math.min(movie.vote_count / 250, 1)
+		const voteConfidence = Math.min(item.vote_count / 250, 1)
 
 		// Rating is only as trustworthy as its vote count
 		const weightedRating = ratingNormalized * voteConfidence
@@ -95,34 +106,42 @@ async function startNewBuild(env: Env, key: string): Promise<void> {
 		return trendingRank * 0.2 + weightedRating * 0.8
 	}
 
-	const movies: PopularItem[] = results.map((movie, index) => ({
-		id: movie.id,
-		title: movie.title,
-		overview: movie.overview,
-		release_date: movie.release_date,
-		popularity: movie.popularity,
-		vote_average: movie.vote_average,
-		vote_count: movie.vote_count,
-		score: Math.round(score(movie, index) * 100) / 100,
-		poster_path: `https://image.tmdb.org/t/p/w342/${movie.poster_path}`,
+	const items: PopularItem[] = results.map((result, index) => ({
+		id: result.id,
+		title: 'title' in result ? result.title : result.name,
+		overview: result.overview,
+		release_date: 'release_date' in result ? result.release_date : result.first_air_date,
+		popularity: result.popularity,
+		vote_average: result.vote_average,
+		vote_count: result.vote_count,
+		score: Math.round(score(result, index) * 100) / 100,
+		poster_path: `https://image.tmdb.org/t/p/w342/${result.poster_path}`,
 		movie: null,
 		series: null,
 	}))
 
-	movies.sort((a, b) => b.score - a.score)
+	items.sort((a, b) => b.score - a.score)
 
 	const list: PopularList = {
 		timestamp: currentWindow(),
-		items: movies,
+		items,
 	}
 
 	await env.STORE.put(key, JSON.stringify(list))
 }
 
-async function continueBuild(env: Env, list: PopularList, key: string): Promise<void> {
+async function continueBuild(env: Env, type: MediaType, list: PopularList, key: string): Promise<void> {
 	const headers = tmdbHeaders(env.TMDB_API_KEY)
 
-	const pending = list.items.filter((m) => m.movie === null)
+	const detailsUrl = type === 'movies'
+		? tmdbUrl.movieDetails
+		: tmdbUrl.seriesDetails
+
+	const isIncomplete = (item: PopularItem) => type === 'movies'
+		? item.movie === null
+		: item.series === null
+
+	const pending = list.items.filter(isIncomplete)
 
 	if (pending.length === 0) {
 		return
@@ -134,32 +153,41 @@ async function continueBuild(env: Env, list: PopularList, key: string): Promise<
 		const chunk = batch.slice(offset, offset + BATCH_SIZE)
 
 		const responses = await Promise.all(
-			chunk.map((movie) =>
-				fetch(tmdbUrl.movieDetails(movie.id), { headers })
+			chunk.map((item) =>
+				fetch(detailsUrl(item.id), { headers })
 			)
 		)
 
 		for (let i = 0; i < chunk.length; i++) {
 			try {
 				if (! responses[i].ok) {
-					Sentry.captureMessage(
-						`TMDB movie detail request failed: movie=${chunk[i].id} status=${responses[i].status}`
-					)
+					Sentry.captureMessage(`TMDB detail request failed: id=${chunk[i].id} status=${responses[i].status}`)
 
 					continue
 				}
 
-				const details = await responses[i].json<MovieDetails>()
+				const item = list.items.find((m) => m.id === chunk[i].id)
 
-				const movie = list.items.find((m) => m.id === chunk[i].id)
+				if (item) {
+					if (type === 'movies') {
+						const details = await responses[i].json<MovieDetails>()
 
-				if (movie) {
-					movie.movie = {
-						imdb_id: details.imdb_id,
-						runtime: details.runtime,
-						status: details.status,
-						genres: details.genres.map((g) => g.name),
-					} satisfies MovieInfo
+						item.movie = {
+							imdb_id: details.imdb_id,
+							runtime: details.runtime,
+							status: details.status,
+							genres: details.genres.map((g) => g.name),
+						} satisfies MovieInfo
+					} else {
+						const details = await responses[i].json<SeriesDetails>()
+
+						item.series = {
+							number_of_seasons: details.number_of_seasons,
+							number_of_episodes: details.number_of_episodes,
+							status: details.status,
+							genres: details.genres.map((g) => g.name),
+						} satisfies SeriesInfo
+					}
 				}
 			} catch (error) {
 				Sentry.captureException(error)

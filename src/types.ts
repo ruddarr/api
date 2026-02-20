@@ -1,3 +1,5 @@
+export type MediaType = 'movies' | 'series'
+
 export interface PopularItem {
 	id: number
 	title: string
