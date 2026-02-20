@@ -71,6 +71,7 @@ async function startNewBuild(env: Env, key: string): Promise<void> {
 	])
 
 	const results = [...data1.results, ...data2.results]
+		.filter((movie, index, arr) => arr.findIndex((m) => m.id === movie.id) === index)
 
 	// The rating threshold where a movie is considered "neutral" (score = 0.5).
 	// Below this: score drops steeply toward 0. Above this: rises toward 1.
