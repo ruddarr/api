@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/cloudflare'
 import { tmdbHeaders, tmdbUrl } from './tmdb'
+import { trendingScore } from './scoring'
 import type { DiscoverMovie, DiscoverSeries, TrendingResponse, MovieDetails, SeriesDetails } from './tmdb'
 import type { MediaType, MovieInfo, SeriesInfo, PopularItem, PopularList } from './types'
 
@@ -84,28 +85,6 @@ async function startNewBuild(env: Env, type: MediaType, key: string): Promise<vo
 	const results = [...data1.results, ...data2.results]
 		.filter((item, index, arr) => arr.findIndex((m) => m.id === item.id) === index)
 
-	// The rating threshold where a movie is considered "neutral" (score = 0.5).
-	// Below this: score drops steeply toward 0. Above this: rises toward 1.
-	// 7.5 is strict — only well-reviewed films get a meaningful boost.
-	const sigmoidCenter = 7.5
-
-	const score = (item: DiscoverMovie | DiscoverSeries, index: number) => {
-		// TMDB's trending rank as a score: 1st place = 1.0, last place ≈ 0.
-		const trendingRank = 1 - index / results.length
-
-		// Sigmoid curve centered at sigmoidCenter
-		const ratingNormalized = 1 / (1 + Math.exp(-1.5 * (item.vote_average - sigmoidCenter)))
-
-		// Linear ramp from 0 to 1 based on vote count, capped at 250.
-		const voteConfidence = Math.min(item.vote_count / 250, 1)
-
-		// Rating is only as trustworthy as its vote count
-		const weightedRating = ratingNormalized * voteConfidence
-
-		// 20% trending rank, 80% confidence-weighted rating
-		return trendingRank * 0.2 + weightedRating * 0.8
-	}
-
 	const items: PopularItem[] = results.map((result, index) => ({
 		id: result.id,
 		title: 'title' in result ? result.title : result.name,
@@ -114,7 +93,7 @@ async function startNewBuild(env: Env, type: MediaType, key: string): Promise<vo
 		popularity: result.popularity,
 		vote_average: result.vote_average,
 		vote_count: result.vote_count,
-		score: Math.round(score(result, index) * 100) / 100,
+		score: trendingScore(result, index, results.length),
 		poster_path: `https://image.tmdb.org/t/p/w342/${result.poster_path}`,
 		movie: null,
 		series: null,
@@ -168,26 +147,10 @@ async function continueBuild(env: Env, type: MediaType, list: PopularList, key: 
 
 				const item = list.items.find((m) => m.id === chunk[i].id)
 
-				if (item) {
-					if (type === 'movies') {
-						const details = await responses[i].json<MovieDetails>()
-
-						item.movie = {
-							imdb_id: details.imdb_id,
-							runtime: details.runtime,
-							status: details.status,
-							genres: details.genres.map((g) => g.name),
-						} satisfies MovieInfo
-					} else {
-						const details = await responses[i].json<SeriesDetails>()
-
-						item.series = {
-							number_of_seasons: details.number_of_seasons,
-							number_of_episodes: details.number_of_episodes,
-							status: details.status,
-							genres: details.genres.map((g) => g.name),
-						} satisfies SeriesInfo
-					}
+				if (item && type === 'movies') {
+					item.movie = await parseMovieDetails(responses[i])
+				} else if (item) {
+					item.series = await parseSeriesDetails(responses[i])
 				}
 			} catch (error) {
 				Sentry.captureException(error)
@@ -196,4 +159,26 @@ async function continueBuild(env: Env, type: MediaType, list: PopularList, key: 
 	}
 
 	await env.STORE.put(key, JSON.stringify(list))
+}
+
+async function parseMovieDetails(response: Response): Promise<MovieInfo> {
+	const details = await response.json<MovieDetails>()
+
+	return {
+		imdb_id: details.imdb_id,
+		runtime: details.runtime,
+		status: details.status,
+		genres: details.genres.map((g) => g.name),
+	}
+}
+
+async function parseSeriesDetails(response: Response): Promise<SeriesInfo> {
+	const details = await response.json<SeriesDetails>()
+
+	return {
+		number_of_seasons: details.number_of_seasons,
+		number_of_episodes: details.number_of_episodes,
+		status: details.status,
+		genres: details.genres.map((g) => g.name),
+	}
 }
