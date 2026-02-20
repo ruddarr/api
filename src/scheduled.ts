@@ -176,8 +176,8 @@ async function parseSeriesDetails(response: Response): Promise<SeriesInfo> {
 	const details = await response.json<SeriesDetails>()
 
 	return {
-		number_of_seasons: details.number_of_seasons,
-		number_of_episodes: details.number_of_episodes,
+		seasons: details.number_of_seasons,
+		episodes: details.number_of_episodes,
 		status: details.status,
 		genres: details.genres.map((g) => g.name),
 	}
