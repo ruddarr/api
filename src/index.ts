@@ -10,11 +10,11 @@ export default withSentry({
 		const path = url.pathname.replace(/\/+$/, '')
 
 		if (path === '/popular/movies') {
-			return handlePopularList(env, 'movies')
+			return handlePopularList(request, env, ctx, 'movies')
 		}
 
 		if (path === '/popular/series') {
-			return handlePopularList(env, 'series')
+			return handlePopularList(request, env, ctx, 'series')
 		}
 
 		return Response.json({ message: 'Not Found' }, { status: 404 })
@@ -28,7 +28,14 @@ export default withSentry({
 	},
 })
 
-async function handlePopularList(env: Env, type: MediaType): Promise<Response> {
+async function handlePopularList(request: Request, env: Env, ctx: ExecutionContext, type: MediaType): Promise<Response> {
+	const cache = caches.default
+	const cached = await cache.match(request)
+
+	if (cached) {
+		return cached
+	}
+
 	const list = await env.STORE.get<PopularList>(`${type}:popular:live`, 'json')
 
 	if (! list) {
@@ -36,11 +43,14 @@ async function handlePopularList(env: Env, type: MediaType): Promise<Response> {
 	}
 
 	const expires = nextWindowAfter(list.timestamp)
-	const maxAge = Math.floor((expires.getTime() - Date.now()) / 1000)
 
-	return Response.json(list, {
+	const response = Response.json(list, {
 		headers: {
-			'Cache-Control': `public, s-maxage=${maxAge}`,
+			'Expires': expires.toUTCString(),
 		},
 	})
+
+	ctx.waitUntil(cache.put(request, response.clone()))
+
+	return response
 }
