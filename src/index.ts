@@ -1,5 +1,7 @@
 import { withSentry } from './sentry'
 import { buildPopularList } from './scheduled'
+import { nextWindowAfter } from './cache'
+
 import type { MediaType, PopularList } from './types'
 
 export default withSentry({
@@ -30,8 +32,15 @@ async function handlePopularList(env: Env, type: MediaType): Promise<Response> {
 	const list = await env.STORE.get<PopularList>(`${type}:popular:live`, 'json')
 
 	if (! list) {
-		return Response.json({ message: 'List not built yet' }, { status: 503 })
+		return Response.json({ message: 'List not built yet' }, { status: 425 })
 	}
 
-	return Response.json(list)
+	const expires = nextWindowAfter(list.timestamp)
+	const maxAge = Math.floor((expires.getTime() - Date.now()) / 1000)
+
+	return Response.json(list, {
+		headers: {
+			'Cache-Control': `public, s-maxage=${maxAge}`,
+		},
+	})
 }

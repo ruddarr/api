@@ -1,16 +1,11 @@
 import * as Sentry from '@sentry/cloudflare'
+
 import { tmdbHeaders, tmdbUrl } from './tmdb'
 import { trendingScore } from './scoring'
-import type { DiscoverMovie, DiscoverSeries, TrendingResponse } from './tmdb'
+import { currentWindow } from './cache'
+
 import type { MediaType, PopularItem, PopularList } from './types'
-
-function currentWindow(): string {
-	const now = new Date()
-	now.setUTCMinutes(0, 0, 0)
-	now.setUTCHours(Math.floor(now.getUTCHours() / 6) * 6)
-
-	return now.toISOString()
-}
+import type { DiscoverMovie, DiscoverSeries, TrendingResponse } from './tmdb'
 
 export async function buildPopularList(env: Env, type: MediaType): Promise<void> {
 	const liveKey = `${type}:popular:live`
