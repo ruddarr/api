@@ -1,6 +1,6 @@
 export type MediaType = 'movies' | 'series'
 
-export interface PopularItem {
+export interface DiscoveryItem {
 	id: number
 	type: 'movie' | 'series'
 	title: string
@@ -13,7 +13,7 @@ export interface PopularItem {
 	poster_path: string
 }
 
-export interface PopularList {
+export interface DiscoveryList {
 	timestamp: string
-	items: PopularItem[]
+	popular: DiscoveryItem[]
 }

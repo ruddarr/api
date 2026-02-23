@@ -4,12 +4,12 @@ import { tmdbHeaders, tmdbUrl } from './tmdb'
 import { trendingScore } from './scoring'
 import { currentWindow } from './cache'
 
-import type { MediaType, PopularItem, PopularList } from './types'
+import type { MediaType, DiscoveryItem, DiscoveryList } from './types'
 import type { DiscoverMovie, DiscoverSeries, TrendingResponse } from './tmdb'
 
-export async function buildPopularList(env: Env, type: MediaType): Promise<void> {
-	const liveKey = `${type}:popular:live`
-	const live = await env.STORE.get<PopularList>(liveKey, 'json')
+export async function buildDiscoveryLists(env: Env, type: MediaType): Promise<void> {
+	const liveKey = `discover:${type}:live`
+	const live = await env.STORE.get<DiscoveryList>(liveKey, 'json')
 
 	if (live && live.timestamp === currentWindow()) {
 		return
@@ -44,7 +44,7 @@ async function startNewBuild(env: Env, type: MediaType, key: string): Promise<vo
 	const results = [...data1.results, ...data2.results]
 		.filter((item, index, arr) => arr.findIndex((m) => m.id === item.id) === index)
 
-	const items: PopularItem[] = results.map((result, index) => ({
+	const items: DiscoveryItem[] = results.map((result, index) => ({
 		id: result.id,
 		type: type === 'movies' ? 'movie' : 'series',
 		title: 'title' in result ? result.title : result.name,
@@ -61,9 +61,9 @@ async function startNewBuild(env: Env, type: MediaType, key: string): Promise<vo
 
 	items.sort((a, b) => b.score - a.score)
 
-	const list: PopularList = {
+	const list: DiscoveryList = {
 		timestamp: currentWindow(),
-		items,
+		popular: items,
 	}
 
 	await env.STORE.put(key, JSON.stringify(list))

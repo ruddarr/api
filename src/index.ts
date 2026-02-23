@@ -1,20 +1,20 @@
 import { withSentry } from './sentry'
-import { buildPopularList } from './scheduled'
+import { buildDiscoveryLists } from './scheduled'
 import { nextWindowAfter } from './cache'
 
-import type { MediaType, PopularList } from './types'
+import type { MediaType, DiscoveryList } from './types'
 
 export default withSentry({
 	async fetch(request, env, ctx): Promise<Response> {
 		const url = new URL(request.url)
 		const path = url.pathname.replace(/\/+$/, '')
 
-		if (path === '/popular/movies') {
-			return handlePopularList(request, env, ctx, 'movies')
+		if (path === '/discover/movies') {
+			return handleDiscoveryRequest(request, env, ctx, 'movies')
 		}
 
-		if (path === '/popular/series') {
-			return handlePopularList(request, env, ctx, 'series')
+		if (path === '/discover/series') {
+			return handleDiscoveryRequest(request, env, ctx, 'series')
 		}
 
 		return Response.json({ message: 'Not Found' }, { status: 404 })
@@ -22,13 +22,13 @@ export default withSentry({
 
 	async scheduled(event, env, ctx): Promise<void> {
 		await Promise.all([
-			buildPopularList(env, 'movies'),
-			buildPopularList(env, 'series'),
+			buildDiscoveryLists(env, 'movies'),
+			buildDiscoveryLists(env, 'series'),
 		])
 	},
 })
 
-async function handlePopularList(request: Request, env: Env, ctx: ExecutionContext, type: MediaType): Promise<Response> {
+async function handleDiscoveryRequest(request: Request, env: Env, ctx: ExecutionContext, type: MediaType): Promise<Response> {
 	const cache = caches.default
 	const cached = await cache.match(request)
 
@@ -36,7 +36,7 @@ async function handlePopularList(request: Request, env: Env, ctx: ExecutionConte
 		return cached
 	}
 
-	const list = await env.STORE.get<PopularList>(`${type}:popular:live`, 'json')
+	const list = await env.STORE.get<DiscoveryList>(`discover:${type}:live`, 'json')
 
 	if (! list) {
 		return Response.json({ message: 'List not built yet' }, { status: 425 })
