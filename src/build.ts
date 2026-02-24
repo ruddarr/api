@@ -7,18 +7,24 @@ import { currentWindow } from './cache'
 import type { MediaType, DiscoveryItem, DiscoveryList } from './types'
 import type { DiscoverMovie, DiscoverSeries, TrendingResponse } from './tmdb'
 
-export async function buildDiscoveryLists(env: Env, type: MediaType): Promise<void> {
-	const liveKey = `discover:${type}:live`
+export async function buildDiscoveryList(env: Env, type: MediaType, language: string): Promise<DiscoveryList | null> {
+	const liveKey = `discover:${type}:${language}`
 	const live = await env.STORE.get<DiscoveryList>(liveKey, 'json')
 
 	if (live && live.timestamp === currentWindow()) {
-		return
+		return live
 	}
 
-	await startNewBuild(env, type, liveKey)
+	const list = await fetchAndBuildList(env, type, language)
+
+	if (list) {
+		await env.STORE.put(liveKey, JSON.stringify(list))
+	}
+
+	return list
 }
 
-async function startNewBuild(env: Env, type: MediaType, key: string): Promise<void> {
+async function fetchAndBuildList(env: Env, type: MediaType, language: string): Promise<DiscoveryList | null> {
 	const headers = tmdbHeaders(env.TMDB_API_KEY)
 
 	const trendingUrl = type === 'movies'
@@ -26,14 +32,14 @@ async function startNewBuild(env: Env, type: MediaType, key: string): Promise<vo
 		: tmdbUrl.trendingSeries
 
 	const [page1, page2] = await Promise.all([
-		fetch(trendingUrl(1), { headers }),
-		fetch(trendingUrl(2), { headers }),
+		fetch(trendingUrl(1, language), { headers }),
+		fetch(trendingUrl(2, language), { headers }),
 	])
 
 	if (! page1.ok || ! page2.ok) {
 		Sentry.captureMessage(`TMDB trending request failed: page1=${page1.status} page2=${page2.status}`)
 
-		return
+		return null
 	}
 
 	const [data1, data2] = await Promise.all([
@@ -61,10 +67,8 @@ async function startNewBuild(env: Env, type: MediaType, key: string): Promise<vo
 
 	items.sort((a, b) => b.score - a.score)
 
-	const list: DiscoveryList = {
+	return {
 		timestamp: currentWindow(),
 		popular: items,
 	}
-
-	await env.STORE.put(key, JSON.stringify(list))
 }

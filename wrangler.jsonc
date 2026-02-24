@@ -23,11 +23,6 @@
 	"vars": {
 		"SENTRY_DSN": "https://818093c06368797205ba7f73f3c4a826@o4506759093354496.ingest.us.sentry.io/4510914896461824"
 	},
-	"triggers": {
-		"crons": [
-			"*/10 * * * *"
-		]
-	},
 	"placement": {
 		"mode": "smart"
 	},

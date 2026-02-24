@@ -1,8 +1,8 @@
 import { withSentry } from './sentry'
-import { buildDiscoveryLists } from './scheduled'
+import { buildDiscoveryList } from './build'
 import { nextWindowAfter } from './cache'
 
-import type { MediaType, DiscoveryList } from './types'
+import type { MediaType } from './types'
 
 export default withSentry({
 	async fetch(request, env, ctx): Promise<Response> {
@@ -19,16 +19,13 @@ export default withSentry({
 
 		return Response.json({ message: 'Not Found' }, { status: 404 })
 	},
-
-	async scheduled(event, env, ctx): Promise<void> {
-		await Promise.all([
-			buildDiscoveryLists(env, 'movies'),
-			buildDiscoveryLists(env, 'series'),
-		])
-	},
 })
 
 async function handleDiscoveryRequest(request: Request, env: Env, ctx: ExecutionContext, type: MediaType): Promise<Response> {
+	const url = new URL(request.url)
+	const rawLanguage = url.searchParams.get('language') ?? 'en-US'
+	const language = /^[a-z]{2,3}(-[a-zA-Z\d]{2,8})*$/.test(rawLanguage) ? rawLanguage : 'en-US'
+
 	const cache = caches.default
 	const cached = await cache.match(request)
 
@@ -36,10 +33,10 @@ async function handleDiscoveryRequest(request: Request, env: Env, ctx: Execution
 		return cached
 	}
 
-	const list = await env.STORE.get<DiscoveryList>(`discover:${type}:live`, 'json')
+	const list = await buildDiscoveryList(env, type, language)
 
 	if (! list) {
-		return Response.json({ message: 'List not built yet' }, { status: 425 })
+		return Response.json({ message: 'Failed to build list' }, { status: 503 })
 	}
 
 	const expires = nextWindowAfter(list.timestamp)
