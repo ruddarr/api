@@ -1,22 +1,25 @@
 {
-	"name": "ruddarr-api",
-	"version": "0.0.0",
-	"private": true,
-	"scripts": {
-		"deploy": "wrangler deploy",
-		"dev": "wrangler dev",
-		"start": "wrangler dev",
-		"test": "vitest",
-		"cf-typegen": "wrangler types"
-	},
-	"devDependencies": {
-		"@cloudflare/vitest-pool-workers": "^0.12.4",
-		"@types/node": "^25.2.3",
-		"typescript": "^5.5.2",
-		"vitest": "~3.2.0",
-		"wrangler": "^4.66.0"
-	},
-	"dependencies": {
-		"@sentry/cloudflare": "^10.39.0"
-	}
+  "name": "ruddarr-api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy --outdir dist --upload-source-maps --var SENTRY_RELEASE:$(sentry-cli releases propose-version)",
+    "dev": "wrangler dev",
+    "start": "wrangler dev",
+    "test": "vitest",
+    "cf-typegen": "wrangler types",
+    "sentry:sourcemaps": "_SENTRY_RELEASE=$(sentry-cli releases propose-version) && sentry-cli releases new $_SENTRY_RELEASE --org=ruddarr --project=api && sentry-cli sourcemaps upload --org=ruddarr --project=api --release=$_SENTRY_RELEASE --strip-prefix 'dist/..' dist",
+    "postdeploy": "npm run sentry:sourcemaps"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.12.4",
+    "@sentry/cli": "^2.58.5",
+    "@types/node": "^25.2.3",
+    "typescript": "^5.5.2",
+    "vitest": "~3.2.0",
+    "wrangler": "^4.66.0"
+  },
+  "dependencies": {
+    "@sentry/cloudflare": "^10.39.0"
+  }
 }
