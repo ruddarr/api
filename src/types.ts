@@ -17,3 +17,8 @@ export interface DiscoveryList {
 	timestamp: string
 	popular: DiscoveryItem[]
 }
+
+export interface UpcomingList {
+	timestamp: string
+	upcoming: DiscoveryItem[]
+}

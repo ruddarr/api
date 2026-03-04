@@ -5,6 +5,13 @@ import type { DiscoverMovie, DiscoverSeries } from './tmdb'
 // 7.5 is strict — only well-reviewed films get a meaningful boost.
 const SIGMOID_CENTER = 7.5
 
+// Popularity cap for normalization; upcoming titles rarely exceed 300 before release.
+const POPULARITY_CAP = 300
+
+export function upcomingScore(item: DiscoverMovie | DiscoverSeries): number {
+	return Math.round(Math.min(item.popularity / POPULARITY_CAP, 1) * 100) / 100
+}
+
 export function trendingScore(item: DiscoverMovie | DiscoverSeries, index: number, total: number): number {
 	// TMDB's trending rank as a score: 1st place = 1.0, last place ≈ 0.
 	const trendingRank = 1 - index / total
