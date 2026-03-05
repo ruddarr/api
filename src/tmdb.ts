@@ -11,7 +11,7 @@ export const tmdbUrl = {
 	trendingMovies: (page: number, language: string) => `${BASE}/trending/movie/week?page=${page}&language=${language}`,
 	trendingSeries: (page: number, language: string) => `${BASE}/trending/tv/week?page=${page}&language=${language}`,
 	upcomingMovies: (page: number, language: string) => `${BASE}/movie/upcoming?page=${page}&language=${language}`,
-	upcomingSeries: (page: number, language: string, dateFrom: string, dateTo: string) => `${BASE}/discover/tv?page=${page}&language=${language}&first_air_date.gte=${dateFrom}&first_air_date.lte=${dateTo}&sort_by=popularity.desc`,
+	upcomingSeries: (page: number, language: string, today: string, ninetyDaysFromNowISO: string) => `${BASE}/discover/tv?page=${page}&language=${language}&first_air_date.gte=${today}&first_air_date.lte=${ninetyDaysFromNowISO}&sort_by=popularity.desc`,
 }
 
 export interface TrendingResponse<T> {

@@ -94,12 +94,12 @@ async function fetchAndBuildUpcomingList(env: Env, type: MediaType, language: st
 	const headers = tmdbHeaders(env.TMDB_API_KEY)
 
 	const now = new Date()
-	const dateFrom = now.toISOString().slice(0, 10)
-	const dateTo = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+	const today = now.toISOString().slice(0, 10)
+	const ninetyDaysFromNowISO = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
 	const upcomingUrl = type === 'movies'
 		? (page: number, lang: string) => tmdbUrl.upcomingMovies(page, lang)
-		: (page: number, lang: string) => tmdbUrl.upcomingSeries(page, lang, dateFrom, dateTo)
+		: (page: number, lang: string) => tmdbUrl.upcomingSeries(page, lang, today, ninetyDaysFromNowISO)
 
 	const [page1, page2] = await Promise.all([
 		fetch(upcomingUrl(1, language), { headers }),
