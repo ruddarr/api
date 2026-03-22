@@ -10,10 +10,15 @@ export interface DiscoveryItem {
 	vote_average: number
 	vote_count: number
 	score: number
-	poster_path: string
+	poster_path: string | null
 }
 
 export interface DiscoveryList {
 	timestamp: string
 	popular: DiscoveryItem[]
+}
+
+export interface UpcomingList {
+	timestamp: string
+	upcoming: DiscoveryItem[]
 }

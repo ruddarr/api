@@ -10,6 +10,8 @@ export function tmdbHeaders(apiKey: string): Record<string, string> {
 export const tmdbUrl = {
 	trendingMovies: (page: number, language: string) => `${BASE}/trending/movie/week?page=${page}&language=${language}`,
 	trendingSeries: (page: number, language: string) => `${BASE}/trending/tv/week?page=${page}&language=${language}`,
+	upcomingMovies: (page: number, language: string, region: string, today: string, ninetyDaysFromNowISO: string) => `${BASE}/discover/movie?page=${page}&language=${language}&primary_release_date.gte=${today}&primary_release_date.lte=${ninetyDaysFromNowISO}&sort_by=popularity.desc`,
+	upcomingSeries: (page: number, language: string, region: string, today: string, ninetyDaysFromNowISO: string) => `${BASE}/discover/tv?page=${page}&language=${language}&first_air_date.gte=${today}&first_air_date.lte=${ninetyDaysFromNowISO}&sort_by=popularity.desc`,
 }
 
 export interface TrendingResponse<T> {
