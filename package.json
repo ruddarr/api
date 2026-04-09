@@ -12,12 +12,12 @@
     "postdeploy": "npm run sentry:sourcemaps"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.12.4",
+    "@cloudflare/vitest-pool-workers": "^0.13.4",
     "@sentry/cli": "^2.58.5",
     "@types/node": "^25.2.3",
     "typescript": "^5.5.2",
     "vitest": "~3.2.0",
-    "wrangler": "^4.66.0"
+    "wrangler": "^4.77.0"
   },
   "dependencies": {
     "@sentry/cloudflare": "^10.39.0"
